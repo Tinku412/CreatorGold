@@ -16,7 +16,7 @@ const INSTAGRAM_CONFIG = {
     // 1. Instagram App Settings (Valid OAuth Redirect URIs)
     // 2. app.js REDIRECT_URI
     // 3. This value (no trailing slash, exact case, HTTPS)
-    REDIRECT_URI: process.env.REDIRECT_URI || 'https://5000mrr.com'
+    REDIRECT_URI: process.env.REDIRECT_URI || 'https://5000mrr.com/'
 };
 
 // Enable CORS for your frontend
@@ -119,7 +119,14 @@ app.post('/get-long-lived-token', async (req, res) => {
 });
 
 app.listen(PORT, () => {
-    console.log(`🚀 Instagram OAuth server running on http://localhost:${PORT}`);
-    console.log(`📝 Token exchange endpoint: http://localhost:${PORT}/exchange-token`);
+    console.log(`🚀 Instagram OAuth server running on port ${PORT}`);
+    console.log(`📝 Token exchange endpoint: /exchange-token`);
+    console.log(`🌐 Environment: ${process.env.NODE_ENV || 'development'}`);
+    console.log(`✅ Server is ready to accept requests`);
+    
+    // Log the actual URL if running on Render
+    if (process.env.RENDER) {
+        console.log(`🔗 Render URL: https://${process.env.RENDER_SERVICE_NAME}.onrender.com`);
+    }
 });
 

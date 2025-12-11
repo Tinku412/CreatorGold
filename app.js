@@ -5,7 +5,7 @@ const CONFIG = {
     // 1. Instagram App Settings (Valid OAuth Redirect URIs)
     // 2. server.js REDIRECT_URI
     // 3. This value (no trailing slash, exact case, HTTPS)
-    REDIRECT_URI: 'https://5000mrr.com',
+    REDIRECT_URI: 'https://5000mrr.com/',
     API_VERSION: 'v22.0',
     BASE_URL: 'https://graph.instagram.com',
     AUTH_URL: 'https://api.instagram.com/oauth/authorize',
