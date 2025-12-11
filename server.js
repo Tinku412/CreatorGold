@@ -46,16 +46,31 @@ app.post('/exchange-token', async (req, res) => {
     // Use redirect_uri from request if provided, otherwise use config
     // This ensures exact match with the one used in authorization request
     const redirectUri = redirect_uri || INSTAGRAM_CONFIG.REDIRECT_URI;
+    
+    // Normalize redirect_uri - remove trailing slash if present (Instagram is strict)
+    // But first, let's log both versions
+    const redirectUriWithSlash = redirectUri.endsWith('/') ? redirectUri : redirectUri + '/';
+    const redirectUriWithoutSlash = redirectUri.endsWith('/') ? redirectUri.slice(0, -1) : redirectUri;
 
     console.log('\n📋 CONFIGURATION:');
     console.log('  - Code received:', code ? `${code.substring(0, 20)}...` : 'MISSING');
     console.log('  - Redirect URI from request:', redirect_uri || 'NOT PROVIDED');
+    console.log('  - Redirect URI from request (length):', redirect_uri ? redirect_uri.length : 'N/A');
     console.log('  - Redirect URI from config:', INSTAGRAM_CONFIG.REDIRECT_URI);
-    console.log('  - Redirect URI to use:', redirectUri);
-    console.log('  - Redirect URI length:', redirectUri.length);
-    console.log('  - Redirect URI has trailing slash:', redirectUri.endsWith('/'));
+    console.log('  - Redirect URI from config (length):', INSTAGRAM_CONFIG.REDIRECT_URI.length);
+    console.log('  - Redirect URI to use (raw):', redirectUri);
+    console.log('  - Redirect URI to use (length):', redirectUri.length);
+    console.log('  - Redirect URI to use (has trailing slash):', redirectUri.endsWith('/'));
+    console.log('  - Redirect URI (bytes):', new TextEncoder().encode(redirectUri));
+    console.log('  - Redirect URI (char codes):', Array.from(redirectUri).map(c => c.charCodeAt(0)));
+    console.log('  - Redirect URI (with slash):', redirectUriWithSlash);
+    console.log('  - Redirect URI (without slash):', redirectUriWithoutSlash);
     console.log('  - App ID:', INSTAGRAM_CONFIG.APP_ID);
     console.log('  - App Secret:', INSTAGRAM_CONFIG.APP_SECRET ? '***HIDDEN***' : 'MISSING');
+    
+    // Try without trailing slash first (as per Instagram docs)
+    const finalRedirectUri = redirectUriWithoutSlash;
+    console.log('  - Final redirect URI to use:', finalRedirectUri);
 
     try {
         // Exchange code for access token
@@ -63,7 +78,7 @@ app.post('/exchange-token', async (req, res) => {
         formData.append('client_id', INSTAGRAM_CONFIG.APP_ID);
         formData.append('client_secret', INSTAGRAM_CONFIG.APP_SECRET);
         formData.append('grant_type', 'authorization_code');
-        formData.append('redirect_uri', redirectUri);
+        formData.append('redirect_uri', finalRedirectUri);
         formData.append('code', code);
 
         // Log what we're sending
@@ -75,7 +90,7 @@ app.post('/exchange-token', async (req, res) => {
         console.log('    * client_id:', INSTAGRAM_CONFIG.APP_ID);
         console.log('    * client_secret:', '***HIDDEN***');
         console.log('    * grant_type: authorization_code');
-        console.log('    * redirect_uri:', redirectUri, `(length: ${redirectUri.length})`);
+        console.log('    * redirect_uri:', finalRedirectUri, `(length: ${finalRedirectUri.length})`);
         console.log('    * code:', code ? `${code.substring(0, 20)}...` : 'MISSING');
         
         // Convert formData to string for logging (without secret)

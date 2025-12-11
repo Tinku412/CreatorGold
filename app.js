@@ -6,7 +6,7 @@ const CONFIG = {
     // 2. server.js REDIRECT_URI
     // 3. Instagram documentation shows NO trailing slash
     REDIRECT_URI: 'https://5000mrr.com',  // NO trailing slash - matches Instagram docs
-    API_VERSION: 'v22.0',
+    API_VERSION: 'v24.0',
     BASE_URL: 'https://graph.instagram.com',
     AUTH_URL: 'https://www.instagram.com/oauth/authorize',  // Updated to match Instagram docs
     // Backend server URL - update this to your deployed backend URL
@@ -66,19 +66,26 @@ function loginWithInstagram() {
         'instagram_business_manage_insights'
     ].join(',');
     
+    // Store the exact redirect_uri we're using in sessionStorage
+    // This ensures we use the exact same one in token exchange
+    const redirectUri = CONFIG.REDIRECT_URI;
+    sessionStorage.setItem('oauth_redirect_uri', redirectUri);
+    sessionStorage.setItem('oauth_timestamp', Date.now().toString());
+    
     const authUrl = `${CONFIG.AUTH_URL}?` +
         `client_id=${CONFIG.APP_ID}&` +
-        `redirect_uri=${encodeURIComponent(CONFIG.REDIRECT_URI)}&` +
+        `redirect_uri=${encodeURIComponent(redirectUri)}&` +
         `scope=${scope}&` +
         `response_type=code`;
     
     console.log('🔐 Instagram OAuth Login:');
     console.log('  - Auth URL:', CONFIG.AUTH_URL);
     console.log('  - Client ID:', CONFIG.APP_ID);
-    console.log('  - Redirect URI:', CONFIG.REDIRECT_URI);
-    console.log('  - Redirect URI (encoded):', encodeURIComponent(CONFIG.REDIRECT_URI));
-    console.log('  - Redirect URI length:', CONFIG.REDIRECT_URI.length);
-    console.log('  - Redirect URI has trailing slash:', CONFIG.REDIRECT_URI.endsWith('/'));
+    console.log('  - Redirect URI (stored):', redirectUri);
+    console.log('  - Redirect URI (encoded):', encodeURIComponent(redirectUri));
+    console.log('  - Redirect URI length:', redirectUri.length);
+    console.log('  - Redirect URI has trailing slash:', redirectUri.endsWith('/'));
+    console.log('  - Redirect URI bytes:', new TextEncoder().encode(redirectUri));
     console.log('  - Scope:', scope);
     console.log('  - Full URL:', authUrl);
     
@@ -86,24 +93,31 @@ function loginWithInstagram() {
 }
 
 // Exchange authorization code for access token via backend
-async function exchangeCodeForToken(code) {
+async function exchangeCodeForToken(code, redirectUri = null) {
+    // Use provided redirect_uri or fall back to config
+    const redirectUriToUse = redirectUri || CONFIG.REDIRECT_URI;
+    
     console.log('\n📡 EXCHANGE CODE FOR TOKEN (Frontend):');
     console.log('  - Backend URL:', CONFIG.BACKEND_URL);
     console.log('  - Endpoint:', `${CONFIG.BACKEND_URL}/exchange-token`);
     console.log('  - Code:', code ? `${code.substring(0, 20)}...` : 'MISSING');
-    console.log('  - Redirect URI:', CONFIG.REDIRECT_URI);
-    console.log('  - Redirect URI length:', CONFIG.REDIRECT_URI.length);
-    console.log('  - Redirect URI has trailing slash:', CONFIG.REDIRECT_URI.endsWith('/'));
+    console.log('  - Redirect URI (provided):', redirectUri || 'NOT PROVIDED');
+    console.log('  - Redirect URI (config):', CONFIG.REDIRECT_URI);
+    console.log('  - Redirect URI (to use):', redirectUriToUse);
+    console.log('  - Redirect URI length:', redirectUriToUse.length);
+    console.log('  - Redirect URI has trailing slash:', redirectUriToUse.endsWith('/'));
+    console.log('  - Redirect URI (bytes):', new TextEncoder().encode(redirectUriToUse));
+    console.log('  - Redirect URI (char codes):', Array.from(redirectUriToUse).map(c => c.charCodeAt(0)));
     
     try {
         const requestBody = { 
             code: code,
-            redirect_uri: CONFIG.REDIRECT_URI  // Pass redirect_uri to ensure exact match
+            redirect_uri: redirectUriToUse  // Use the exact redirect_uri
         };
         
         console.log('  - Request body:', JSON.stringify({
             code: code ? `${code.substring(0, 20)}...` : 'MISSING',
-            redirect_uri: CONFIG.REDIRECT_URI
+            redirect_uri: redirectUriToUse
         }, null, 2));
         
         // Pass redirect_uri to backend to ensure exact match
@@ -143,8 +157,27 @@ async function exchangeCodeForToken(code) {
 // Handle OAuth callback
 async function handleOAuthCallback() {
     console.log('\n=== OAUTH CALLBACK HANDLER START ===');
-    console.log('  - Current URL:', window.location.href);
-    console.log('  - Search params:', window.location.search);
+    console.log('  - Current URL (full):', window.location.href);
+    console.log('  - Current URL (origin):', window.location.origin);
+    console.log('  - Current URL (pathname):', window.location.pathname);
+    console.log('  - Current URL (search):', window.location.search);
+    console.log('  - Current URL (hash):', window.location.hash);
+    
+    // Extract the actual redirect URI that Instagram redirected to (without query params)
+    const actualRedirectUri = window.location.origin + window.location.pathname;
+    console.log('  - Actual redirect URI (from URL):', actualRedirectUri);
+    console.log('  - Actual redirect URI length:', actualRedirectUri.length);
+    console.log('  - Actual redirect URI has trailing slash:', actualRedirectUri.endsWith('/'));
+    
+    // Get the stored redirect_uri from sessionStorage
+    const storedRedirectUri = sessionStorage.getItem('oauth_redirect_uri');
+    console.log('  - Stored redirect URI (from sessionStorage):', storedRedirectUri);
+    console.log('  - Config redirect URI:', CONFIG.REDIRECT_URI);
+    
+    // Use the stored one if available, otherwise use config, otherwise use actual URL
+    const redirectUriToUse = storedRedirectUri || CONFIG.REDIRECT_URI || actualRedirectUri;
+    console.log('  - Redirect URI to use for token exchange:', redirectUriToUse);
+    console.log('  - Redirect URI to use (bytes):', new TextEncoder().encode(redirectUriToUse));
     
     const urlParams = new URLSearchParams(window.location.search);
     const code = urlParams.get('code');
@@ -164,6 +197,8 @@ async function handleOAuthCallback() {
         showError(`Login failed: ${errorDescription || error}`);
         // Clean up URL
         window.history.replaceState({}, document.title, window.location.pathname);
+        sessionStorage.removeItem('oauth_redirect_uri');
+        sessionStorage.removeItem('oauth_timestamp');
         console.log('=== OAUTH CALLBACK HANDLER END (ERROR) ===\n');
         return false;
     }
@@ -172,12 +207,13 @@ async function handleOAuthCallback() {
         try {
             console.log('\n📞 Calling exchangeCodeForToken...');
             console.log('  - Code:', code ? `${code.substring(0, 20)}...` : 'MISSING');
-            console.log('  - Redirect URI to send:', CONFIG.REDIRECT_URI);
+            console.log('  - Redirect URI to send:', redirectUriToUse);
             console.log('  - Backend URL:', CONFIG.BACKEND_URL);
             
             showToast('Exchanging authorization code...', 'info');
             
-            const tokenData = await exchangeCodeForToken(code);
+            // Use the exact redirect_uri that was stored
+            const tokenData = await exchangeCodeForToken(code, redirectUriToUse);
             
             console.log('  - Token data received:', tokenData ? 'YES' : 'NO');
             if (tokenData) {
@@ -191,8 +227,10 @@ async function handleOAuthCallback() {
                     localStorage.setItem('instagram_user_id', tokenData.user_id);
                 }
                 
-                // Clean up URL
+                // Clean up URL and sessionStorage
                 window.history.replaceState({}, document.title, window.location.pathname);
+                sessionStorage.removeItem('oauth_redirect_uri');
+                sessionStorage.removeItem('oauth_timestamp');
                 
                 console.log('✅ Login successful!');
                 showToast('Login successful!', 'success');
@@ -206,6 +244,8 @@ async function handleOAuthCallback() {
             console.error('  - Error stack:', error.stack);
             showError(`Failed to complete login: ${error.message}`);
             window.history.replaceState({}, document.title, window.location.pathname);
+            sessionStorage.removeItem('oauth_redirect_uri');
+            sessionStorage.removeItem('oauth_timestamp');
             console.log('=== OAUTH CALLBACK HANDLER END (EXCEPTION) ===\n');
             return false;
         }
