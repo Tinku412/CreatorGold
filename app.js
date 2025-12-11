@@ -72,57 +72,118 @@ function loginWithInstagram() {
         `scope=${scope}&` +
         `response_type=code`;
     
+    console.log('🔐 Instagram OAuth Login:');
+    console.log('  - Auth URL:', CONFIG.AUTH_URL);
+    console.log('  - Client ID:', CONFIG.APP_ID);
+    console.log('  - Redirect URI:', CONFIG.REDIRECT_URI);
+    console.log('  - Redirect URI (encoded):', encodeURIComponent(CONFIG.REDIRECT_URI));
+    console.log('  - Redirect URI length:', CONFIG.REDIRECT_URI.length);
+    console.log('  - Redirect URI has trailing slash:', CONFIG.REDIRECT_URI.endsWith('/'));
+    console.log('  - Scope:', scope);
+    console.log('  - Full URL:', authUrl);
+    
     window.location.href = authUrl;
 }
 
 // Exchange authorization code for access token via backend
 async function exchangeCodeForToken(code) {
+    console.log('\n📡 EXCHANGE CODE FOR TOKEN (Frontend):');
+    console.log('  - Backend URL:', CONFIG.BACKEND_URL);
+    console.log('  - Endpoint:', `${CONFIG.BACKEND_URL}/exchange-token`);
+    console.log('  - Code:', code ? `${code.substring(0, 20)}...` : 'MISSING');
+    console.log('  - Redirect URI:', CONFIG.REDIRECT_URI);
+    console.log('  - Redirect URI length:', CONFIG.REDIRECT_URI.length);
+    console.log('  - Redirect URI has trailing slash:', CONFIG.REDIRECT_URI.endsWith('/'));
+    
     try {
+        const requestBody = { 
+            code: code,
+            redirect_uri: CONFIG.REDIRECT_URI  // Pass redirect_uri to ensure exact match
+        };
+        
+        console.log('  - Request body:', JSON.stringify({
+            code: code ? `${code.substring(0, 20)}...` : 'MISSING',
+            redirect_uri: CONFIG.REDIRECT_URI
+        }, null, 2));
+        
         // Pass redirect_uri to backend to ensure exact match
         const response = await fetch(`${CONFIG.BACKEND_URL}/exchange-token`, {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json'
             },
-            body: JSON.stringify({ 
-                code: code,
-                redirect_uri: CONFIG.REDIRECT_URI  // Pass redirect_uri to ensure exact match
-            })
+            body: JSON.stringify(requestBody)
         });
 
+        console.log('  - Response status:', response.status, response.statusText);
+        console.log('  - Response ok:', response.ok);
+
         const data = await response.json();
+        console.log('  - Response data:', JSON.stringify({
+            ...data,
+            access_token: data.access_token ? `${data.access_token.substring(0, 20)}...` : undefined
+        }, null, 2));
 
         if (data.error) {
+            console.error('  - Error in response:', data.error);
             throw new Error(data.error);
         }
 
+        console.log('✅ Token exchange successful (frontend)');
         return data;
     } catch (error) {
-        console.error('Error exchanging code for token:', error);
+        console.error('❌ Error exchanging code for token (frontend):');
+        console.error('  - Error name:', error.name);
+        console.error('  - Error message:', error.message);
+        console.error('  - Error stack:', error.stack);
         throw error;
     }
 }
 
 // Handle OAuth callback
 async function handleOAuthCallback() {
+    console.log('\n=== OAUTH CALLBACK HANDLER START ===');
+    console.log('  - Current URL:', window.location.href);
+    console.log('  - Search params:', window.location.search);
+    
     const urlParams = new URLSearchParams(window.location.search);
     const code = urlParams.get('code');
     const error = urlParams.get('error');
     const errorReason = urlParams.get('error_reason');
     const errorDescription = urlParams.get('error_description');
+    const state = urlParams.get('state');
+
+    console.log('  - Code:', code ? `${code.substring(0, 20)}...` : 'NOT FOUND');
+    console.log('  - Error:', error || 'NONE');
+    console.log('  - Error reason:', errorReason || 'NONE');
+    console.log('  - Error description:', errorDescription || 'NONE');
+    console.log('  - State:', state || 'NONE');
 
     if (error) {
+        console.error('❌ OAuth error received from Instagram');
         showError(`Login failed: ${errorDescription || error}`);
         // Clean up URL
         window.history.replaceState({}, document.title, window.location.pathname);
+        console.log('=== OAUTH CALLBACK HANDLER END (ERROR) ===\n');
         return false;
     }
 
     if (code) {
         try {
+            console.log('\n📞 Calling exchangeCodeForToken...');
+            console.log('  - Code:', code ? `${code.substring(0, 20)}...` : 'MISSING');
+            console.log('  - Redirect URI to send:', CONFIG.REDIRECT_URI);
+            console.log('  - Backend URL:', CONFIG.BACKEND_URL);
+            
             showToast('Exchanging authorization code...', 'info');
             
             const tokenData = await exchangeCodeForToken(code);
+            
+            console.log('  - Token data received:', tokenData ? 'YES' : 'NO');
+            if (tokenData) {
+                console.log('  - Has access_token:', !!tokenData.access_token);
+                console.log('  - Has user_id:', !!tokenData.user_id);
+            }
             
             if (tokenData.access_token) {
                 setAccessToken(tokenData.access_token);
@@ -133,17 +194,25 @@ async function handleOAuthCallback() {
                 // Clean up URL
                 window.history.replaceState({}, document.title, window.location.pathname);
                 
+                console.log('✅ Login successful!');
                 showToast('Login successful!', 'success');
                 updateUI();
+                console.log('=== OAUTH CALLBACK HANDLER END (SUCCESS) ===\n');
                 return true;
             }
         } catch (error) {
+            console.error('❌ Error in token exchange:');
+            console.error('  - Error message:', error.message);
+            console.error('  - Error stack:', error.stack);
             showError(`Failed to complete login: ${error.message}`);
             window.history.replaceState({}, document.title, window.location.pathname);
+            console.log('=== OAUTH CALLBACK HANDLER END (EXCEPTION) ===\n');
             return false;
         }
     }
 
+    console.log('⚠️ No code and no error - callback may have been triggered incorrectly');
+    console.log('=== OAUTH CALLBACK HANDLER END (NO ACTION) ===\n');
     return false;
 }
 
