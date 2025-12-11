@@ -1,16 +1,14 @@
 // Instagram API Configuration
 const CONFIG = {
     APP_ID: '1751885948806154',
-    // IMPORTANT: This must match EXACTLY in:
-    // 1. Instagram App Settings (Valid OAuth Redirect URIs)
-    // 2. server.js REDIRECT_URI
-    // 3. Instagram documentation shows NO trailing slash
-    REDIRECT_URI: 'https://5000mrr.com',  // NO trailing slash - matches Instagram docs
     API_VERSION: 'v24.0',
     BASE_URL: 'https://graph.instagram.com',
-    AUTH_URL: 'https://www.instagram.com/oauth/authorize',  // Updated to match Instagram docs
-    // Backend server URL - update this to your deployed backend URL
-    BACKEND_URL: 'https://creatorgold.onrender.com'
+    AUTH_URL: 'https://www.instagram.com/oauth/authorize',
+    // Backend server URL - handles OAuth callback
+    BACKEND_URL: 'https://creatorgold.onrender.com',
+    // OAuth redirect URI is now handled by backend
+    // Backend will redirect to this frontend URL after successful login
+    FRONTEND_URL: 'https://5000mrr.com'
 };
 
 // Get access token from localStorage
@@ -66,11 +64,8 @@ function loginWithInstagram() {
         'instagram_business_manage_insights'
     ].join(',');
     
-    // Store the exact redirect_uri we're using in sessionStorage
-    // This ensures we use the exact same one in token exchange
-    const redirectUri = CONFIG.REDIRECT_URI;
-    sessionStorage.setItem('oauth_redirect_uri', redirectUri);
-    sessionStorage.setItem('oauth_timestamp', Date.now().toString());
+    // Redirect URI is now the backend callback endpoint
+    const redirectUri = `${CONFIG.BACKEND_URL}/oauth/callback`;
     
     const authUrl = `${CONFIG.AUTH_URL}?` +
         `client_id=${CONFIG.APP_ID}&` +
@@ -81,177 +76,70 @@ function loginWithInstagram() {
     console.log('🔐 Instagram OAuth Login:');
     console.log('  - Auth URL:', CONFIG.AUTH_URL);
     console.log('  - Client ID:', CONFIG.APP_ID);
-    console.log('  - Redirect URI (stored):', redirectUri);
+    console.log('  - Redirect URI (backend callback):', redirectUri);
     console.log('  - Redirect URI (encoded):', encodeURIComponent(redirectUri));
-    console.log('  - Redirect URI length:', redirectUri.length);
-    console.log('  - Redirect URI has trailing slash:', redirectUri.endsWith('/'));
-    console.log('  - Redirect URI bytes:', new TextEncoder().encode(redirectUri));
     console.log('  - Scope:', scope);
     console.log('  - Full URL:', authUrl);
     
     window.location.href = authUrl;
 }
 
-// Exchange authorization code for access token via backend
-async function exchangeCodeForToken(code, redirectUri = null) {
-    // Use provided redirect_uri or fall back to config
-    const redirectUriToUse = redirectUri || CONFIG.REDIRECT_URI;
-    
-    console.log('\n📡 EXCHANGE CODE FOR TOKEN (Frontend):');
-    console.log('  - Backend URL:', CONFIG.BACKEND_URL);
-    console.log('  - Endpoint:', `${CONFIG.BACKEND_URL}/exchange-token`);
-    console.log('  - Code:', code ? `${code.substring(0, 20)}...` : 'MISSING');
-    console.log('  - Redirect URI (provided):', redirectUri || 'NOT PROVIDED');
-    console.log('  - Redirect URI (config):', CONFIG.REDIRECT_URI);
-    console.log('  - Redirect URI (to use):', redirectUriToUse);
-    console.log('  - Redirect URI length:', redirectUriToUse.length);
-    console.log('  - Redirect URI has trailing slash:', redirectUriToUse.endsWith('/'));
-    console.log('  - Redirect URI (bytes):', new TextEncoder().encode(redirectUriToUse));
-    console.log('  - Redirect URI (char codes):', Array.from(redirectUriToUse).map(c => c.charCodeAt(0)));
-    
-    try {
-        const requestBody = { 
-            code: code,
-            redirect_uri: redirectUriToUse  // Use the exact redirect_uri
-        };
-        
-        console.log('  - Request body:', JSON.stringify({
-            code: code ? `${code.substring(0, 20)}...` : 'MISSING',
-            redirect_uri: redirectUriToUse
-        }, null, 2));
-        
-        // Pass redirect_uri to backend to ensure exact match
-        const response = await fetch(`${CONFIG.BACKEND_URL}/exchange-token`, {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json'
-            },
-            body: JSON.stringify(requestBody)
-        });
+// Token exchange is now handled by backend OAuth callback
+// This function is no longer needed but kept for reference
 
-        console.log('  - Response status:', response.status, response.statusText);
-        console.log('  - Response ok:', response.ok);
-
-        const data = await response.json();
-        console.log('  - Response data:', JSON.stringify({
-            ...data,
-            access_token: data.access_token ? `${data.access_token.substring(0, 20)}...` : undefined
-        }, null, 2));
-
-        if (data.error) {
-            console.error('  - Error in response:', data.error);
-            throw new Error(data.error);
-        }
-
-        console.log('✅ Token exchange successful (frontend)');
-        return data;
-    } catch (error) {
-        console.error('❌ Error exchanging code for token (frontend):');
-        console.error('  - Error name:', error.name);
-        console.error('  - Error message:', error.message);
-        console.error('  - Error stack:', error.stack);
-        throw error;
-    }
-}
-
-// Handle OAuth callback
+// Handle OAuth callback - Backend redirects here with token or error
 async function handleOAuthCallback() {
     console.log('\n=== OAUTH CALLBACK HANDLER START ===');
-    console.log('  - Current URL (full):', window.location.href);
-    console.log('  - Current URL (origin):', window.location.origin);
-    console.log('  - Current URL (pathname):', window.location.pathname);
-    console.log('  - Current URL (search):', window.location.search);
-    console.log('  - Current URL (hash):', window.location.hash);
-    
-    // Extract the actual redirect URI that Instagram redirected to (without query params)
-    const actualRedirectUri = window.location.origin + window.location.pathname;
-    console.log('  - Actual redirect URI (from URL):', actualRedirectUri);
-    console.log('  - Actual redirect URI length:', actualRedirectUri.length);
-    console.log('  - Actual redirect URI has trailing slash:', actualRedirectUri.endsWith('/'));
-    
-    // Get the stored redirect_uri from sessionStorage
-    const storedRedirectUri = sessionStorage.getItem('oauth_redirect_uri');
-    console.log('  - Stored redirect URI (from sessionStorage):', storedRedirectUri);
-    console.log('  - Config redirect URI:', CONFIG.REDIRECT_URI);
-    
-    // Use the stored one if available, otherwise use config, otherwise use actual URL
-    const redirectUriToUse = storedRedirectUri || CONFIG.REDIRECT_URI || actualRedirectUri;
-    console.log('  - Redirect URI to use for token exchange:', redirectUriToUse);
-    console.log('  - Redirect URI to use (bytes):', new TextEncoder().encode(redirectUriToUse));
+    console.log('  - Current URL:', window.location.href);
+    console.log('  - Search params:', window.location.search);
     
     const urlParams = new URLSearchParams(window.location.search);
-    const code = urlParams.get('code');
+    const token = urlParams.get('token');
+    const userId = urlParams.get('user_id');
     const error = urlParams.get('error');
-    const errorReason = urlParams.get('error_reason');
     const errorDescription = urlParams.get('error_description');
-    const state = urlParams.get('state');
 
-    console.log('  - Code:', code ? `${code.substring(0, 20)}...` : 'NOT FOUND');
+    console.log('  - Token:', token ? `${token.substring(0, 20)}...` : 'NOT FOUND');
+    console.log('  - User ID:', userId || 'NOT FOUND');
     console.log('  - Error:', error || 'NONE');
-    console.log('  - Error reason:', errorReason || 'NONE');
     console.log('  - Error description:', errorDescription || 'NONE');
-    console.log('  - State:', state || 'NONE');
 
     if (error) {
-        console.error('❌ OAuth error received from Instagram');
+        console.error('❌ OAuth error received from backend');
         showError(`Login failed: ${errorDescription || error}`);
         // Clean up URL
         window.history.replaceState({}, document.title, window.location.pathname);
-        sessionStorage.removeItem('oauth_redirect_uri');
-        sessionStorage.removeItem('oauth_timestamp');
         console.log('=== OAUTH CALLBACK HANDLER END (ERROR) ===\n');
         return false;
     }
 
-    if (code) {
+    if (token) {
         try {
-            console.log('\n📞 Calling exchangeCodeForToken...');
-            console.log('  - Code:', code ? `${code.substring(0, 20)}...` : 'MISSING');
-            console.log('  - Redirect URI to send:', redirectUriToUse);
-            console.log('  - Backend URL:', CONFIG.BACKEND_URL);
-            
-            showToast('Exchanging authorization code...', 'info');
-            
-            // Use the exact redirect_uri that was stored
-            const tokenData = await exchangeCodeForToken(code, redirectUriToUse);
-            
-            console.log('  - Token data received:', tokenData ? 'YES' : 'NO');
-            if (tokenData) {
-                console.log('  - Has access_token:', !!tokenData.access_token);
-                console.log('  - Has user_id:', !!tokenData.user_id);
+            console.log('✅ Token received from backend');
+            setAccessToken(token);
+            if (userId) {
+                localStorage.setItem('instagram_user_id', userId);
             }
             
-            if (tokenData.access_token) {
-                setAccessToken(tokenData.access_token);
-                if (tokenData.user_id) {
-                    localStorage.setItem('instagram_user_id', tokenData.user_id);
-                }
-                
-                // Clean up URL and sessionStorage
-                window.history.replaceState({}, document.title, window.location.pathname);
-                sessionStorage.removeItem('oauth_redirect_uri');
-                sessionStorage.removeItem('oauth_timestamp');
-                
-                console.log('✅ Login successful!');
-                showToast('Login successful!', 'success');
-                updateUI();
-                console.log('=== OAUTH CALLBACK HANDLER END (SUCCESS) ===\n');
-                return true;
-            }
-        } catch (error) {
-            console.error('❌ Error in token exchange:');
-            console.error('  - Error message:', error.message);
-            console.error('  - Error stack:', error.stack);
-            showError(`Failed to complete login: ${error.message}`);
+            // Clean up URL
             window.history.replaceState({}, document.title, window.location.pathname);
-            sessionStorage.removeItem('oauth_redirect_uri');
-            sessionStorage.removeItem('oauth_timestamp');
+            
+            console.log('✅ Login successful!');
+            showToast('Login successful!', 'success');
+            updateUI();
+            console.log('=== OAUTH CALLBACK HANDLER END (SUCCESS) ===\n');
+            return true;
+        } catch (error) {
+            console.error('❌ Error storing token:');
+            console.error('  - Error message:', error.message);
+            showError(`Failed to store token: ${error.message}`);
+            window.history.replaceState({}, document.title, window.location.pathname);
             console.log('=== OAUTH CALLBACK HANDLER END (EXCEPTION) ===\n');
             return false;
         }
     }
 
-    console.log('⚠️ No code and no error - callback may have been triggered incorrectly');
+    console.log('⚠️ No token and no error - callback may have been triggered incorrectly');
     console.log('=== OAUTH CALLBACK HANDLER END (NO ACTION) ===\n');
     return false;
 }

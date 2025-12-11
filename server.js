@@ -12,9 +12,16 @@ const PORT = process.env.PORT || 3000;
 const INSTAGRAM_CONFIG = {
     APP_ID: '1751885948806154',
     APP_SECRET: '6f39e0ffd4ffccbd731142cf3b1bb9dd',
-    // IMPORTANT: This must match EXACTLY - NO trailing slash per Instagram docs
-    // Instagram documentation: redirect_uri=https://5000mrr.com (no trailing slash)
-    REDIRECT_URI: process.env.REDIRECT_URI || 'https://5000mrr.com'  // NO trailing slash
+    // Backend URL - this is where Instagram will redirect after OAuth
+    BACKEND_URL: process.env.BACKEND_URL || 'https://creatorgold.onrender.com',
+    // Frontend URL - where to redirect user after successful login
+    FRONTEND_URL: process.env.FRONTEND_URL || 'https://5000mrr.com',
+    // OAuth callback path on backend
+    OAUTH_CALLBACK_PATH: '/oauth/callback',
+    // Full redirect URI for OAuth (backend handles callback)
+    get REDIRECT_URI() {
+        return `${this.BACKEND_URL}${this.OAUTH_CALLBACK_PATH}`;
+    }
 };
 
 // Enable CORS for your frontend
@@ -30,7 +37,96 @@ app.get('/', (req, res) => {
     res.json({ status: 'Instagram OAuth Server Running' });
 });
 
-// Token exchange endpoint
+// OAuth callback endpoint - Instagram redirects here after user authorizes
+app.get('/oauth/callback', async (req, res) => {
+    console.log('\n=== OAUTH CALLBACK RECEIVED ===');
+    console.log('  - Query params:', JSON.stringify(req.query, null, 2));
+    console.log('  - Full URL:', req.url);
+    
+    const { code, error, error_reason, error_description } = req.query;
+    
+    if (error) {
+        console.error('❌ OAuth error from Instagram:');
+        console.error('  - Error:', error);
+        console.error('  - Reason:', error_reason);
+        console.error('  - Description:', error_description);
+        
+        // Redirect to frontend with error
+        const errorUrl = `${INSTAGRAM_CONFIG.FRONTEND_URL}?error=${encodeURIComponent(error)}&error_description=${encodeURIComponent(error_description || error)}`;
+        console.log('  - Redirecting to frontend with error:', errorUrl);
+        return res.redirect(errorUrl);
+    }
+    
+    if (!code) {
+        console.error('❌ No authorization code received');
+        const errorUrl = `${INSTAGRAM_CONFIG.FRONTEND_URL}?error=no_code&error_description=No authorization code received`;
+        return res.redirect(errorUrl);
+    }
+    
+    console.log('  - Authorization code received:', code ? `${code.substring(0, 20)}...` : 'MISSING');
+    console.log('  - Redirect URI used:', INSTAGRAM_CONFIG.REDIRECT_URI);
+    
+    try {
+        // Exchange code for access token
+        const formData = new URLSearchParams();
+        formData.append('client_id', INSTAGRAM_CONFIG.APP_ID);
+        formData.append('client_secret', INSTAGRAM_CONFIG.APP_SECRET);
+        formData.append('grant_type', 'authorization_code');
+        formData.append('redirect_uri', INSTAGRAM_CONFIG.REDIRECT_URI);
+        formData.append('code', code);
+        
+        console.log('\n📤 EXCHANGING CODE FOR TOKEN:');
+        console.log('  - URL: https://api.instagram.com/oauth/access_token');
+        console.log('  - Redirect URI:', INSTAGRAM_CONFIG.REDIRECT_URI);
+        console.log('  - Redirect URI length:', INSTAGRAM_CONFIG.REDIRECT_URI.length);
+        
+        const response = await fetch('https://api.instagram.com/oauth/access_token', {
+            method: 'POST',
+            body: formData,
+            headers: {
+                'Content-Type': 'application/x-www-form-urlencoded'
+            }
+        });
+        
+        const data = await response.json();
+        console.log('  - Response status:', response.status);
+        console.log('  - Response data:', JSON.stringify({
+            ...data,
+            access_token: data.access_token ? `${data.access_token.substring(0, 20)}...` : undefined
+        }, null, 2));
+        
+        if (data.error_message) {
+            console.error('❌ Token exchange error:', data.error_message);
+            const errorUrl = `${INSTAGRAM_CONFIG.FRONTEND_URL}?error=token_exchange_failed&error_description=${encodeURIComponent(data.error_message)}`;
+            return res.redirect(errorUrl);
+        }
+        
+        if (data.access_token) {
+            console.log('✅ Token exchange successful!');
+            console.log('  - Access token:', data.access_token ? `${data.access_token.substring(0, 20)}...` : 'MISSING');
+            console.log('  - User ID:', data.user_id);
+            
+            // Redirect to frontend with token in URL (frontend will extract and store)
+            // In production, you might want to use httpOnly cookies or sessions instead
+            const successUrl = `${INSTAGRAM_CONFIG.FRONTEND_URL}?token=${encodeURIComponent(data.access_token)}&user_id=${encodeURIComponent(data.user_id || '')}`;
+            console.log('  - Redirecting to frontend with token');
+            return res.redirect(successUrl);
+        }
+        
+        // Fallback error
+        const errorUrl = `${INSTAGRAM_CONFIG.FRONTEND_URL}?error=unknown&error_description=Token exchange completed but no token received`;
+        return res.redirect(errorUrl);
+        
+    } catch (error) {
+        console.error('❌ Exception during token exchange:');
+        console.error('  - Error:', error.message);
+        console.error('  - Stack:', error.stack);
+        const errorUrl = `${INSTAGRAM_CONFIG.FRONTEND_URL}?error=exception&error_description=${encodeURIComponent(error.message)}`;
+        return res.redirect(errorUrl);
+    }
+});
+
+// Token exchange endpoint (kept for backward compatibility, but OAuth callback handles it now)
 app.post('/exchange-token', async (req, res) => {
     console.log('\n=== TOKEN EXCHANGE REQUEST START ===');
     console.log('Request body:', JSON.stringify(req.body, null, 2));
@@ -182,13 +278,13 @@ app.post('/get-long-lived-token', async (req, res) => {
 
 app.listen(PORT, () => {
     console.log(`🚀 Instagram OAuth server running on port ${PORT}`);
-    console.log(`📝 Token exchange endpoint: /exchange-token`);
+    console.log(`📝 OAuth callback endpoint: ${INSTAGRAM_CONFIG.REDIRECT_URI}`);
+    console.log(`🌐 Frontend URL: ${INSTAGRAM_CONFIG.FRONTEND_URL}`);
     console.log(`🌐 Environment: ${process.env.NODE_ENV || 'development'}`);
     console.log(`✅ Server is ready to accept requests`);
-    
-    // Log the actual URL if running on Render
-    if (process.env.RENDER) {
-        console.log(`🔗 Render URL: https://${process.env.RENDER_SERVICE_NAME}.onrender.com`);
-    }
+    console.log(`\n📋 Configuration:`);
+    console.log(`  - Backend URL: ${INSTAGRAM_CONFIG.BACKEND_URL}`);
+    console.log(`  - Redirect URI: ${INSTAGRAM_CONFIG.REDIRECT_URI}`);
+    console.log(`  - Make sure this redirect URI is in Instagram App Settings!`);
 });
 
