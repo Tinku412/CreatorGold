@@ -12,7 +12,11 @@ const PORT = process.env.PORT || 3000;
 const INSTAGRAM_CONFIG = {
     APP_ID: '1751885948806154',
     APP_SECRET: '6f39e0ffd4ffccbd731142cf3b1bb9dd',
-    REDIRECT_URI: 'https://5000mrr.com'
+    // IMPORTANT: This must match EXACTLY in:
+    // 1. Instagram App Settings (Valid OAuth Redirect URIs)
+    // 2. app.js REDIRECT_URI
+    // 3. This value (no trailing slash, exact case, HTTPS)
+    REDIRECT_URI: process.env.REDIRECT_URI || 'https://5000mrr.com'
 };
 
 // Enable CORS for your frontend
@@ -30,11 +34,21 @@ app.get('/', (req, res) => {
 
 // Token exchange endpoint
 app.post('/exchange-token', async (req, res) => {
-    const { code } = req.body;
+    const { code, redirect_uri } = req.body;
 
     if (!code) {
         return res.status(400).json({ error: 'Authorization code is required' });
     }
+
+    // Use redirect_uri from request if provided, otherwise use config
+    // This ensures exact match with the one used in authorization request
+    const redirectUri = redirect_uri || INSTAGRAM_CONFIG.REDIRECT_URI;
+
+    console.log('Token exchange request:', {
+        hasCode: !!code,
+        redirectUri: redirectUri,
+        configRedirectUri: INSTAGRAM_CONFIG.REDIRECT_URI
+    });
 
     try {
         // Exchange code for access token
@@ -42,7 +56,7 @@ app.post('/exchange-token', async (req, res) => {
         formData.append('client_id', INSTAGRAM_CONFIG.APP_ID);
         formData.append('client_secret', INSTAGRAM_CONFIG.APP_SECRET);
         formData.append('grant_type', 'authorization_code');
-        formData.append('redirect_uri', INSTAGRAM_CONFIG.REDIRECT_URI);
+        formData.append('redirect_uri', redirectUri);  // Use the exact redirect_uri from request
         formData.append('code', code);
 
         const response = await fetch('https://api.instagram.com/oauth/access_token', {

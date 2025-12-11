@@ -1,6 +1,10 @@
 // Instagram API Configuration
 const CONFIG = {
     APP_ID: '1751885948806154',
+    // IMPORTANT: This must match EXACTLY in:
+    // 1. Instagram App Settings (Valid OAuth Redirect URIs)
+    // 2. server.js REDIRECT_URI
+    // 3. This value (no trailing slash, exact case, HTTPS)
     REDIRECT_URI: 'https://5000mrr.com',
     API_VERSION: 'v22.0',
     BASE_URL: 'https://graph.instagram.com',
@@ -74,12 +78,16 @@ function loginWithInstagram() {
 // Exchange authorization code for access token via backend
 async function exchangeCodeForToken(code) {
     try {
+        // Pass redirect_uri to backend to ensure exact match
         const response = await fetch(`${CONFIG.BACKEND_URL}/exchange-token`, {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json'
             },
-            body: JSON.stringify({ code })
+            body: JSON.stringify({ 
+                code: code,
+                redirect_uri: CONFIG.REDIRECT_URI  // Pass redirect_uri to ensure exact match
+            })
         });
 
         const data = await response.json();
