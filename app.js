@@ -6,7 +6,7 @@ const CONFIG = {
     BASE_URL: 'https://graph.instagram.com',
     AUTH_URL: 'https://api.instagram.com/oauth/authorize',
     // Backend server URL - update this to your deployed backend URL
-    BACKEND_URL: 'http://localhost:3000' // Change to your backend URL (e.g., 'https://your-backend.herokuapp.com')
+    BACKEND_URL: 'https://creatorgold.onrender.com' // Change to your backend URL (e.g., 'https://your-backend.herokuapp.com')
 };
 
 // Get access token from localStorage
