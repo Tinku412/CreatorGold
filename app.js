@@ -4,13 +4,13 @@ const CONFIG = {
     // IMPORTANT: This must match EXACTLY in:
     // 1. Instagram App Settings (Valid OAuth Redirect URIs)
     // 2. server.js REDIRECT_URI
-    // 3. This value (no trailing slash, exact case, HTTPS)
-    REDIRECT_URI: 'https://5000mrr.com/',
+    // 3. Instagram documentation shows NO trailing slash
+    REDIRECT_URI: 'https://5000mrr.com',  // NO trailing slash - matches Instagram docs
     API_VERSION: 'v22.0',
     BASE_URL: 'https://graph.instagram.com',
-    AUTH_URL: 'https://api.instagram.com/oauth/authorize',
+    AUTH_URL: 'https://www.instagram.com/oauth/authorize',  // Updated to match Instagram docs
     // Backend server URL - update this to your deployed backend URL
-    BACKEND_URL: 'https://creatorgold.onrender.com' // Change to your backend URL (e.g., 'https://your-backend.herokuapp.com')
+    BACKEND_URL: 'https://creatorgold.onrender.com'
 };
 
 // Get access token from localStorage

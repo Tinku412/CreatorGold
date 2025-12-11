@@ -12,11 +12,9 @@ const PORT = process.env.PORT || 3000;
 const INSTAGRAM_CONFIG = {
     APP_ID: '1751885948806154',
     APP_SECRET: '6f39e0ffd4ffccbd731142cf3b1bb9dd',
-    // IMPORTANT: This must match EXACTLY in:
-    // 1. Instagram App Settings (Valid OAuth Redirect URIs)
-    // 2. app.js REDIRECT_URI
-    // 3. This value (no trailing slash, exact case, HTTPS)
-    REDIRECT_URI: process.env.REDIRECT_URI || 'https://5000mrr.com/'
+    // IMPORTANT: This must match EXACTLY - NO trailing slash per Instagram docs
+    // Instagram documentation: redirect_uri=https://5000mrr.com (no trailing slash)
+    REDIRECT_URI: process.env.REDIRECT_URI || 'https://5000mrr.com'  // NO trailing slash
 };
 
 // Enable CORS for your frontend
